@@ -12,6 +12,9 @@ connectDB();
 app.use(cors());
 app.use(express.json());
 
+// Rutas de la API
+app.use('/api/users', require('./routes/userRoutes'));
+
 // prueba
 app.get('/', (req, res) => {
   res.json({ success: true, message: "API funcionando" });
