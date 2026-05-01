@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UTN Chat - Final</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="bg-slate-900 text-white h-screen flex flex-col items-center justify-center">
+
+    
+    <div id="auth-container" class="bg-slate-800 p-8 rounded-xl shadow-2xl w-full max-w-md border border-slate-700">
+        <h2 class="text-2xl font-bold text-cyan-400 mb-6 text-center">Bienvenido al Chat UTN</h2>
+        
+        <div class="space-y-4">
+            <input type="text" id="username" placeholder="Nombre de usuario (solo para registro)" class="w-full p-2 bg-slate-700 rounded border-none outline-none focus:ring-2 focus:ring-cyan-500">
+            <input type="email" id="email" placeholder="Correo electrónico" class="w-full p-2 bg-slate-700 rounded border-none outline-none focus:ring-2 focus:ring-cyan-500">
+            <input type="password" id="password" placeholder="Contraseña" class="w-full p-2 bg-slate-700 rounded border-none outline-none focus:ring-2 focus:ring-cyan-500">
+            
+            <div class="flex gap-2 pt-2">
+                <button onclick="handleAuth('login')" class="flex-1 bg-cyan-600 hover:bg-cyan-500 py-2 rounded font-bold transition">Ingresar</button>
+                <button onclick="handleAuth('register')" class="flex-1 bg-slate-600 hover:bg-slate-500 py-2 rounded font-bold transition">Registrarse</button>
+            </div>
+        </div>
+        <p id="auth-error" class="text-red-400 text-sm mt-4 text-center hidden"></p>
+    </div>
+
+    
+    <div id="chat-container" class="hidden flex-col h-screen w-full max-w-4xl bg-slate-900 border-x border-slate-800">
+        <header class="p-4 bg-slate-800 border-b border-slate-700 flex justify-between items-center">
+            <div>
+                <h1 class="text-xl font-bold text-cyan-400">UTN Chat Room 🚀</h1>
+                <p id="user-display" class="text-xs text-slate-400 font-mono"></p>
+            </div>
+            <button onclick="location.reload()" class="text-xs bg-red-900/30 hover:bg-red-900/50 text-red-400 px-3 py-1 rounded border border-red-900/50">Salir</button>
+        </header>
+
+        <main id="chat-box" class="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col"></main>
+
+        <footer class="p-4 bg-slate-800 border-t border-slate-700">
+            <form id="chat-form" class="flex gap-2">
+                <input type="text" id="msg-input" placeholder="Escribe un mensaje..." class="flex-1 bg-slate-700 border-none rounded-lg px-4 py-2 focus:ring-2 focus:ring-cyan-500 outline-none">
+                <button type="submit" class="bg-cyan-600 hover:bg-cyan-500 px-6 py-2 rounded-lg font-bold transition">Enviar</button>
+            </form>
+        </footer>
+    </div>
+
+    <script>
+        const socket = io();
+        let currentUser = null;
+
+        const authContainer = document.getElementById('auth-container');
+        const chatContainer = document.getElementById('chat-container');
+        const chatBox = document.getElementById('chat-box');
+        const authError = document.getElementById('auth-error');
+
+        
+        async function handleAuth(type) {
+            const username = document.getElementById('username').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            const url = type === 'login' ? '/api/users/login' : '/api/users/register';
+            const body = type === 'login' ? { email, password } : { username, email, password };
+
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+
+                if (data.ok) {
+                    currentUser = data.user;
+                    showChat();
+                } else {
+                    authError.innerText = data.msg;
+                    authError.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error("Error en auth:", err);
+            }
+        }
+
+        function showChat() {
+            authContainer.classList.add('hidden');
+            chatContainer.classList.remove('hidden');
+            chatContainer.classList.add('flex');
+            document.body.classList.remove('items-center', 'justify-center');
+            document.getElementById('user-display').innerText = `Conectado como: ${currentUser.username}`;
+        }
+
+        
+        socket.on('historial', (messages) => {
+            messages.forEach(msg => renderMessage(msg));
+        });
+
+        socket.on('mensaje-recibido', (data) => {
+            renderMessage(data);
+        });
+
+        function renderMessage(data) {
+            const isMe = currentUser && (data.username === currentUser.username);
+            const div = document.createElement('div');
+            div.className = `max-w-[70%] p-3 rounded-xl shadow-sm ${isMe ? 'self-end bg-cyan-900 border-r-4 border-cyan-400' : 'self-start bg-slate-800 border-l-4 border-slate-600'}`;
+            div.innerHTML = `<p class="text-[10px] font-bold opacity-60 uppercase">${data.username}</p>
+                             <p class="text-sm pt-1">${data.text}</p>`;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        document.getElementById('chat-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = document.getElementById('msg-input').value.trim();
+            if (text && currentUser) {
+                socket.emit('mensaje-enviado', {
+                    userId: currentUser.id,
+                    username: currentUser.username,
+                    text
+                });
+                document.getElementById('msg-input').value = '';
+            }
+        });
+    </script>
+</body>
+</html>
